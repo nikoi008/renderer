@@ -12,7 +12,7 @@ typedef struct
 {
     unsigned int id;
 }Shader;
-void loadFileToRAM(char** buffer, char* path);
+void loadFileToRAM(char** buffer, const char* path);
 void buildShader(Shader* shader,const char* vertexPath,const char* fragmentPath);
 void useShader(Shader* shader);
 void setBool(Shader* shader,const char* name,bool value);

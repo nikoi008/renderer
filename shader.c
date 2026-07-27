@@ -5,7 +5,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-void loadFileToRAM(char** buffer, char* path)
+void loadFileToRAM(char** buffer,const char* path)
 {
     FILE* filePointer = fopen(path,"r");
     if(filePointer == NULL){ printf("Could not open %s\n",path); return;}
@@ -30,7 +30,7 @@ void buildShader(Shader* shader,const char* vertexPath,const char* fragmentPath)
     unsigned int vertex, fragment;
 
     vertex = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertex, 1, &vertexShaderBuffer, NULL);
+    glShaderSource(vertex, 1, (const char* const*)&vertexShaderBuffer, NULL);
     glCompileShader(vertex);
 
     int success;
@@ -44,7 +44,7 @@ void buildShader(Shader* shader,const char* vertexPath,const char* fragmentPath)
     };
 
     fragment = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragment, 1, &fragmentShaderBuffer, NULL);
+    glShaderSource(fragment, 1, (const char* const*)&fragmentShaderBuffer, NULL);
     glCompileShader(fragment);
     glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
     if(!success)
