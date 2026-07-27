@@ -8,6 +8,7 @@ find_package(glad CONFIG REQUIRED)
 
 add_executable(renderer main.c
         shader.h
-        shader.c)
+        shader.c
+        stb_image.h)
 
 target_link_libraries(renderer PRIVATE glfw glad::glad)
