@@ -7,7 +7,7 @@
 
 void loadFileToRAM(char** buffer,const char* path)
 {
-    FILE* filePointer = fopen(path,"r");
+    FILE* filePointer = fopen(path,"rb");
     if(filePointer == NULL){ printf("Could not open %s\n",path); return;}
     fseek(filePointer,0,SEEK_END);
     long fileSize =  ftell(filePointer);
