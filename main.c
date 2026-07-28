@@ -12,9 +12,46 @@ void frameBufferSizeCallback(GLFWwindow* window, int width, int height)
     glViewport(0, 0, width, height);
 }
 
-int main()
+void cameraInput(GLFWwindow *window,vec3* cameraPos, vec3* cameraFront, vec3* cameraUp) //todo make camera struct
 {
 
+    const float cameraSpeed = 0.05f; // adjust accordingly
+    vec3 offset;
+    vec3 crossProduct;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    {
+
+        glm_vec3_scale(*cameraFront, cameraSpeed, offset);
+        glm_vec3_add(*cameraPos, offset, *cameraPos);
+    }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    {
+        // cameraPos -= cameraSpeed * cameraFront;
+        glm_vec3_scale(*cameraFront, cameraSpeed, offset);
+        glm_vec3_sub(*cameraPos,offset,*cameraPos);
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    {
+        //cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+        glm_vec3_cross(*cameraFront,*cameraUp,crossProduct);
+        glm_vec3_normalize(crossProduct);
+        glm_vec3_scale(crossProduct,cameraSpeed,offset);
+        glm_vec3_sub(*cameraPos,offset,*cameraPos);
+
+    }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    {
+        //cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+        glm_vec3_cross(*cameraFront,*cameraUp,crossProduct);
+        glm_vec3_normalize(crossProduct);
+        glm_vec3_scale(crossProduct,cameraSpeed,offset);
+        glm_vec3_add(*cameraPos,offset,*cameraPos);
+    }
+}
+
+int main()
+{
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -173,19 +210,7 @@ int main()
     }
     stbi_image_free(data);
 
-/*
-    vec3 cameraPos = {0.0f,0.0f,0.0f};
-    vec3 cameraTarget = {0.0f, 0.0f, 0.0f};
-    vec3 cameraDirection;
-    glm_vec3_sub(cameraPos, cameraTarget, cameraDirection);
 
-    vec3 up = {0.0f,1.0f,0.0f};
-    vec3 cameraRight;
-    glm_vec3_cross(up, cameraDirection, cameraRight);
-    glm_vec3_normalize(cameraRight);
-
-    vec3 cameraUp; glm_vec3_cross(cameraDirection,cameraRight,cameraUp);
-    */
 
     mat4 projection;
     glm_mat4_identity(projection);
@@ -199,16 +224,27 @@ int main()
 
 
 
+    vec3 cameraPos   = {0.0f, 0.0f, 3.0f};
+    vec3 cameraFront = {0.0f, 0.0f,-1.0f};
+    vec3 cameraUp    = {0.0f, 1.0f, 0.0f};
+
 
     while (!glfwWindowShouldClose(window))
     {
 
+        cameraInput(window,&cameraPos,&cameraFront,&cameraUp);
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glEnable(GL_DEPTH_TEST);
         glBindTexture(GL_TEXTURE_2D, texture);
         //glm_rotate(model, (float)glfwGetTime() * glm_rad(50.0f),(vec3){0.5f, 1.0f, 0.0f});
         useShader(&triShader);
+
+        glm_mat4_identity(view);
+
+        vec3 center;
+        glm_vec3_add(cameraPos,cameraFront,center);
+        glm_lookat(cameraPos, center, cameraUp,view);
 
         //setMat4(&triShader,"transform",trans);
 
