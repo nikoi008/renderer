@@ -4,6 +4,8 @@
 #include "shader.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+#include <cglm/cglm.h>
+
 
 void frameBufferSizeCallback(GLFWwindow* window, int width, int height)
 {
@@ -82,7 +84,7 @@ int main()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
@@ -96,16 +98,29 @@ int main()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    stbi_set_flip_vertically_on_load(true);
     int width, height, nrChannels;
-    unsigned char *data = stbi_load("container.jpg", &width, &height, &nrChannels, 0);
+    unsigned char *data = stbi_load("migu.jpg", &width, &height, &nrChannels, 0);
+
+    vec4 vec = {1.0f,0.0f, 0.0f,1.0f};
+    mat4 trans;
+    glm_mat4_identity(trans);
+    glm_translate(trans,(vec3){0.2f,0.2f,0.0f});
+    glm_mat4_mulv(trans, vec, vec);
+    //glm_rotate(trans, glm_rad(90.0f), (vec3){0.0f, 0.0f, 1.0f});
+    glm_scale(trans, (vec3){0.5f, 0.5f, 0.5f});
+
+
     if (data)
     {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        printf("width %d height %d channels %d\n", width, height, nrChannels);
         glGenerateMipmap(GL_TEXTURE_2D);
     }
     else
     {
-        printf("failed to load texture");
+        printf("failed to load texture %s\n", stbi_failure_reason());
     }
     stbi_image_free(data);
 
@@ -121,6 +136,8 @@ int main()
         glBindTexture(GL_TEXTURE_2D, texture);
 
         useShader(&triShader);
+        unsigned int transformLoc = glGetUniformLocation(triShader.id,"transform");
+        glUniformMatrix4fv(transformLoc, 1, GL_FALSE, (const GLfloat*)trans);
         glBindVertexArray(VAO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
