@@ -7,7 +7,7 @@
 
 #include <glad/glad.h>
 #include <stdbool.h>
-
+#include <cglm/cglm.h>
 typedef struct
 {
     unsigned int id;
@@ -18,5 +18,6 @@ void useShader(Shader* shader);
 void setBool(Shader* shader,const char* name,bool value);
 void setInt(Shader* shader,const char* name,int value);
 void setFloat(Shader* shader,const char* name,float value);
+void setMat4(Shader* shader, const char* name, mat4 value);
 
 #endif //RENDERER_SHADER_H

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <cglm/cglm.h>
 
 void loadFileToRAM(char** buffer,const char* path)
 {
@@ -86,4 +87,10 @@ void setInt(Shader* shader, const char* name, int value)
 void setFloat(Shader* shader, const char* name, float value)
 {
     glUniform1f(glGetUniformLocation(shader->id, name), value);
+}
+
+void setMat4(Shader* shader, const char* name, mat4 value)
+{
+    int location = glGetUniformLocation(shader->id,name);
+    glUniformMatrix4fv(location, 1, GL_FALSE, (const GLfloat*)value);
 }

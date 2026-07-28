@@ -92,6 +92,19 @@ int main()
         0, 1, 3, // first triangle
         1, 2, 3  // second triangle
     };
+
+    vec3 cubePositions[] = {
+        {0.0f, 0.0f, 0.0f},
+        {2.0f, 5.0f, -15.0f},
+        {-1.5f, -2.2f, -2.5f},
+        {-3.8f, -2.0f, -12.3f},
+        {2.4f, -0.4f, -3.5f},
+        {-1.7f, 3.0f, -7.5f},
+        {1.3f, -2.0f, -2.5f},
+        {1.5f, 2.0f, -2.5f},
+        {1.5f, 0.2f, -1.5f},
+        {-1.3f, 1.0f, -1.5f}
+    };
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 
@@ -194,21 +207,27 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glEnable(GL_DEPTH_TEST);
         glBindTexture(GL_TEXTURE_2D, texture);
-        glm_mat4_identity(model);
-        glm_rotate(model, (float)glfwGetTime() * glm_rad(50.0f),(vec3){0.5f, 1.0f, 0.0f});
+        //glm_rotate(model, (float)glfwGetTime() * glm_rad(50.0f),(vec3){0.5f, 1.0f, 0.0f});
         useShader(&triShader);
-        unsigned int transformLoc = glGetUniformLocation(triShader.id,"transform");
-        //glUniformMatrix4fv(transformLoc, 1, GL_FALSE, (const GLfloat*)trans);
-        int modelLoc = glGetUniformLocation(triShader.id, "model");
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, (const GLfloat*)model);
-        int viewLoc = glGetUniformLocation(triShader.id, "view");
-        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, (const GLfloat*)view);
 
-        int projLoc = glGetUniformLocation(triShader.id, "projection");
-        glUniformMatrix4fv(projLoc, 1, GL_FALSE, (const GLfloat*)projection);
+        //setMat4(&triShader,"transform",trans);
+
+        setMat4(&triShader,"model",model);
+        setMat4(&triShader,"view",view);
+        setMat4(&triShader,"projection",projection);
+
         glBindVertexArray(VAO);
-        //glDrawArrays(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+        for (int i = 0; i < 10; i++)
+        {
+            //mat4 model;
+            glm_mat4_identity(model);
+            glm_translate(model,cubePositions[i]);
+            float angle = 20.0f * i;
+            glm_rotate(model,(float)glfwGetTime() * glm_rad(angle),(vec3){1.0f,0.3f,0.5f});
+            setMat4(&triShader,"model",model);
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
+
 
         glfwSwapBuffers(window);
         glfwPollEvents();
