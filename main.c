@@ -5,11 +5,54 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #include <cglm/cglm.h>
+float lastX = 400, lastY = 300;
+float yaw   = -90.0f;	// yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right so we initially rotate a bit to the left.
+float pitch =  0.0f;
+vec3 cameraFront = {0.0f, 0.0f,-1.0f};
+float fov   =  45.0f;
+#define SCREEN_HEIGHT 600
+#define SCREEN_WIDTH 800
+void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+{
 
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; // reversed: y ranges bottom to top
+    lastX = xpos;
+    lastY = ypos;
+    const float sensitivity = 0.1f;
+    xoffset *= sensitivity;
+    yoffset *= sensitivity;
+
+    yaw += xoffset;
+    pitch += yoffset;
+
+    if(pitch > 89.0f)
+        pitch = 89.0f;
+    if(pitch < -89.0f)
+        pitch = -89.0f;
+
+    vec3 direction;
+    direction[0] = cos(glm_rad(yaw)) * cos(glm_rad(pitch));
+    direction[1] = sin(glm_rad(pitch));
+    direction[2] = sin(glm_rad(yaw)) * cos(glm_rad(pitch));
+    glm_normalize(direction);
+    cameraFront[0] = direction[0];
+    cameraFront[1] = direction[1];
+    cameraFront[2] = direction[2];
+}
 
 void frameBufferSizeCallback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    fov -= (float)yoffset;
+    if (fov < 1.0f)
+        fov = 1.0f;
+    if (fov > 45.0f)
+        fov = 45.0f;
 }
 
 void cameraInput(GLFWwindow *window,vec3* cameraPos, vec3* cameraFront, vec3* cameraUp) //todo make camera struct
@@ -56,7 +99,6 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
     GLFWwindow* window = glfwCreateWindow(800, 600, "openglwindow", NULL, NULL);
     if (window == NULL)
     {
@@ -75,6 +117,9 @@ int main()
 
     glViewport(0, 0, 800, 600);
     glfwSetFramebufferSizeCallback(window, frameBufferSizeCallback);
+    glfwSetCursorPosCallback(window, mouse_callback);
+    glfwSetScrollCallback(window, scroll_callback);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
 
     Shader triShader;
@@ -225,7 +270,7 @@ int main()
 
 
     vec3 cameraPos   = {0.0f, 0.0f, 3.0f};
-    vec3 cameraFront = {0.0f, 0.0f,-1.0f};
+    //vec3 cameraFront = {0.0f, 0.0f,-1.0f}; DECLARED AS GLOBAL!!!
     vec3 cameraUp    = {0.0f, 1.0f, 0.0f};
 
 
@@ -246,7 +291,9 @@ int main()
         glm_vec3_add(cameraPos,cameraFront,center);
         glm_lookat(cameraPos, center, cameraUp,view);
 
-        //setMat4(&triShader,"transform",trans);
+        glm_mat4_identity(projection);
+        glm_perspective(glm_rad(fov),(float)SCREEN_WIDTH / (float)SCREEN_HEIGHT,0.1f,100.0f,projection);
+
 
         setMat4(&triShader,"model",model);
         setMat4(&triShader,"view",view);
@@ -277,3 +324,4 @@ int main()
     glfwTerminate();
     return 0;
 }
+
