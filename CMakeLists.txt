@@ -6,10 +6,13 @@ set(CMAKE_C_STANDARD 11)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(glad CONFIG REQUIRED)
 find_package(cglm CONFIG REQUIRED)
+find_package(assimp CONFIG REQUIRED)
 
 add_executable(renderer main.c
         shader.h
         shader.c
-        stb_image.h)
+        stb_image.h
+        camera.c
+        camera.h)
 
-target_link_libraries(renderer PRIVATE glfw glad::glad cglm::cglm)
+target_link_libraries(renderer PRIVATE glfw glad::glad cglm::cglm assimp::assimp)
