@@ -5,40 +5,126 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #include <cglm/cglm.h>
-float lastX = 400, lastY = 300;
-float yaw   = -90.0f;	// yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right so we initially rotate a bit to the left.
-float pitch =  0.0f;
-vec3 cameraFront = {0.0f, 0.0f,-1.0f};
-float fov   =  45.0f;
 #define SCREEN_HEIGHT 600
 #define SCREEN_WIDTH 800
-void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+
+
+typedef struct {
+    vec3 cameraPos;
+    vec3 cameraFront;
+    vec3 cameraUp;
+    vec3 cameraRight;
+    vec3 worldUp;
+    float yaw;
+    float pitch;
+    float cameraSpeed;
+    float mouseSensitivity;
+    float fov;
+} Camera;
+
+Camera camera;
+
+float lastX = SCREEN_WIDTH / 2.0f;
+float lastY = SCREEN_HEIGHT / 2.0f;
+bool firstMouse = true;
+
+
+void updateCameraVectors(Camera *camera)
 {
+    vec3 front;
+    front[0] = cosf(glm_rad(camera->yaw)) * cosf(glm_rad(camera->pitch));
+    front[1] = sinf(glm_rad(camera->pitch));
+    front[2] = sinf(glm_rad(camera->yaw)) * cosf(glm_rad(camera->pitch));
+
+    glm_vec3_normalize_to(front, camera->cameraFront);
+
+    glm_vec3_cross(camera->cameraFront, camera->worldUp, camera->cameraRight);
+    glm_vec3_normalize(camera->cameraRight);
+
+    glm_vec3_cross(camera->cameraRight, camera->cameraFront, camera->cameraUp);
+    glm_vec3_normalize(camera->cameraUp);
+}
+
+void initCamera(Camera *camera, vec3 pos, vec3 up, float yaw, float pitch)
+{
+    glm_vec3_copy(pos, camera->cameraPos);
+    glm_vec3_copy(up, camera->worldUp);
+    camera->yaw = yaw;
+    camera->pitch = pitch;
+    camera->cameraSpeed = 0.05f;
+    camera->mouseSensitivity = 0.1f;
+    camera->fov = 45.0f;
+
+    updateCameraVectors(camera);
+}
+
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
+{
+    float xpos = (float)xposIn;
+    float ypos = (float)yposIn;
+
+    if (firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
 
     float xoffset = xpos - lastX;
     float yoffset = lastY - ypos; // reversed: y ranges bottom to top
     lastX = xpos;
     lastY = ypos;
-    const float sensitivity = 0.1f;
-    xoffset *= sensitivity;
-    yoffset *= sensitivity;
 
-    yaw += xoffset;
-    pitch += yoffset;
+    xoffset *= camera.mouseSensitivity;
+    yoffset *= camera.mouseSensitivity;
 
-    if(pitch > 89.0f)
-        pitch = 89.0f;
-    if(pitch < -89.0f)
-        pitch = -89.0f;
+    camera.yaw   += xoffset;
+    camera.pitch += yoffset;
 
-    vec3 direction;
-    direction[0] = cos(glm_rad(yaw)) * cos(glm_rad(pitch));
-    direction[1] = sin(glm_rad(pitch));
-    direction[2] = sin(glm_rad(yaw)) * cos(glm_rad(pitch));
-    glm_normalize(direction);
-    cameraFront[0] = direction[0];
-    cameraFront[1] = direction[1];
-    cameraFront[2] = direction[2];
+    if (camera.pitch > 89.0f)  camera.pitch = 89.0f;
+    if (camera.pitch < -89.0f) camera.pitch = -89.0f;
+
+    updateCameraVectors(&camera);
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    camera.fov -= (float)yoffset;
+    if (camera.fov < 1.0f)  camera.fov = 1.0f;
+    if (camera.fov > 45.0f) camera.fov = 45.0f;
+}
+
+void cameraInput(GLFWwindow *window)
+{
+    vec3 offset;
+    vec3 crossProduct;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    {
+        glm_vec3_scale(camera.cameraFront, camera.cameraSpeed, offset);
+        glm_vec3_add(camera.cameraPos, offset, camera.cameraPos);
+    }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    {
+        glm_vec3_scale(camera.cameraFront, camera.cameraSpeed, offset);
+        glm_vec3_sub(camera.cameraPos, offset, camera.cameraPos);
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    {
+        //cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+        glm_vec3_cross(camera.cameraFront,camera.cameraUp,crossProduct);
+        glm_vec3_normalize(crossProduct);
+        glm_vec3_scale(crossProduct,camera.cameraSpeed,offset);
+        glm_vec3_sub(camera.cameraPos,offset,camera.cameraPos);
+    }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    {
+        //cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+        glm_vec3_cross(camera.cameraFront,camera.cameraUp,crossProduct);
+        glm_vec3_normalize(crossProduct);
+        glm_vec3_scale(crossProduct,camera.cameraSpeed,offset);
+        glm_vec3_add(camera.cameraPos,offset,camera.cameraPos);
+    }
 }
 
 void frameBufferSizeCallback(GLFWwindow* window, int width, int height)
@@ -46,55 +132,7 @@ void frameBufferSizeCallback(GLFWwindow* window, int width, int height)
     glViewport(0, 0, width, height);
 }
 
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
-{
-    fov -= (float)yoffset;
-    if (fov < 1.0f)
-        fov = 1.0f;
-    if (fov > 45.0f)
-        fov = 45.0f;
-}
-
-void cameraInput(GLFWwindow *window,vec3* cameraPos, vec3* cameraFront, vec3* cameraUp) //todo make camera struct
-{
-
-    const float cameraSpeed = 0.05f; // adjust accordingly
-    vec3 offset;
-    vec3 crossProduct;
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-    {
-
-        glm_vec3_scale(*cameraFront, cameraSpeed, offset);
-        glm_vec3_add(*cameraPos, offset, *cameraPos);
-    }
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-    {
-        // cameraPos -= cameraSpeed * cameraFront;
-        glm_vec3_scale(*cameraFront, cameraSpeed, offset);
-        glm_vec3_sub(*cameraPos,offset,*cameraPos);
-    }
-
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-    {
-        //cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-        glm_vec3_cross(*cameraFront,*cameraUp,crossProduct);
-        glm_vec3_normalize(crossProduct);
-        glm_vec3_scale(crossProduct,cameraSpeed,offset);
-        glm_vec3_sub(*cameraPos,offset,*cameraPos);
-
-    }
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-    {
-        //cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-        glm_vec3_cross(*cameraFront,*cameraUp,crossProduct);
-        glm_vec3_normalize(crossProduct);
-        glm_vec3_scale(crossProduct,cameraSpeed,offset);
-        glm_vec3_add(*cameraPos,offset,*cameraPos);
-    }
-}
-
-int main()
-{
+int main() {
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -111,16 +149,18 @@ int main()
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
-        printf("Failed to initialize GLAD");
+        printf("Failed to initialize GLAD\n");
         return -1;
     }
 
-    glViewport(0, 0, 800, 600);
+    glEnable(GL_DEPTH_TEST);
+
     glfwSetFramebufferSizeCallback(window, frameBufferSizeCallback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
+    initCamera(&camera, (vec3){0.0f, 0.0f, 3.0f}, (vec3){0.0f, 1.0f, 0.0f}, -90.0f, 0.0f);
 
     Shader triShader;
     buildShader(&triShader,"vs.vs","fs.fs");
@@ -201,10 +241,10 @@ int main()
     unsigned int VAO, VBO, EBO;
 
     glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
-
 
     glGenBuffers(1, &VBO);
+
+    glBindVertexArray(VAO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
@@ -233,15 +273,6 @@ int main()
     int width, height, nrChannels;
     unsigned char *data = stbi_load("migu.jpg", &width, &height, &nrChannels, 0);
 
-    vec4 vec = {1.0f,0.0f, 0.0f,1.0f};
-    mat4 trans;
-    glm_mat4_identity(trans);
-    glm_translate(trans,(vec3){0.2f,0.2f,0.0f});
-    glm_mat4_mulv(trans, vec, vec);
-    //glm_rotate(trans, glm_rad(90.0f), (vec3){0.0f, 0.0f, 1.0f});
-    glm_scale(trans, (vec3){0.5f, 0.5f, 0.5f});
-
-
     if (data)
     {
         GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
@@ -255,45 +286,25 @@ int main()
     }
     stbi_image_free(data);
 
-
-
-    mat4 projection;
-    glm_mat4_identity(projection);
-    glm_perspective(glm_rad(45.0f),(float)width /(float)height, 0.1f, 100.0f,projection);
     mat4 model;
-    glm_mat4_identity(model);
-    glm_rotate(model,glm_rad(-55.0f),(vec3){1.0f,0.0f,0.0f});
     mat4 view;
-    glm_mat4_identity(view);
-    glm_translate(view,(vec3){0.0f,0.0f,-3.0f});
-
-
-
-    vec3 cameraPos   = {0.0f, 0.0f, 3.0f};
-    //vec3 cameraFront = {0.0f, 0.0f,-1.0f}; DECLARED AS GLOBAL!!!
-    vec3 cameraUp    = {0.0f, 1.0f, 0.0f};
-
+    mat4 projection;
 
     while (!glfwWindowShouldClose(window))
     {
+        cameraInput(window);
 
-        cameraInput(window,&cameraPos,&cameraFront,&cameraUp);
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glEnable(GL_DEPTH_TEST);
         glBindTexture(GL_TEXTURE_2D, texture);
-        //glm_rotate(model, (float)glfwGetTime() * glm_rad(50.0f),(vec3){0.5f, 1.0f, 0.0f});
         useShader(&triShader);
 
-        glm_mat4_identity(view);
 
         vec3 center;
-        glm_vec3_add(cameraPos,cameraFront,center);
-        glm_lookat(cameraPos, center, cameraUp,view);
+        glm_vec3_add(camera.cameraPos, camera.cameraFront, center);
+        glm_lookat(camera.cameraPos, center, camera.cameraUp, view);
 
-        glm_mat4_identity(projection);
-        glm_perspective(glm_rad(fov),(float)SCREEN_WIDTH / (float)SCREEN_HEIGHT,0.1f,100.0f,projection);
-
+        glm_perspective(glm_rad(camera.fov), (float)SCREEN_WIDTH / (float)SCREEN_HEIGHT, 0.1f, 100.0f, projection);
 
         setMat4(&triShader,"model",model);
         setMat4(&triShader,"view",view);
