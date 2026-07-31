@@ -1,460 +1,199 @@
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-#include <stdio.h>
-#include "shader.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-#include <cglm/cglm.h>
-#include <assimp/cimport.h>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
-#include "camera.h"
+    #include <glad/glad.h>
+    #include <GLFW/glfw3.h>
+    #include <stdio.h>
+    #include "shader.h"
+    #define STB_IMAGE_IMPLEMENTATION
+    #include "stb_image.h"
+    #include <cglm/cglm.h>
+    #include <assimp/cimport.h>
+    #include <assimp/scene.h>
+    #include <assimp/postprocess.h>
+    #include "camera.h"
+    #include "model.h"
+    #define NK_INCLUDE_FIXED_TYPES
+    #define NK_INCLUDE_STANDARD_IO
+    #define NK_INCLUDE_STANDARD_VARARGS
+    #define NK_INCLUDE_DEFAULT_ALLOCATOR
+    #define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
+    #define NK_INCLUDE_FONT_BAKING
+    #define NK_INCLUDE_DEFAULT_FONT
+    #define NK_IMPLEMENTATION
+    #define NK_GLFW_GL3_IMPLEMENTATION
+    #include "nuklear.h"
+    #include "nuklear_glfw_gl3.h"
 
-typedef struct
-{
-    vec3 position;
-    vec3 normal;
-    vec2 texCoords;
-    vec3 tangent;
-    vec3 bitangent;
-}Vertex;
-
-typedef struct
-{
-    int id;
-    char* type;
-}Texture;
-
-typedef struct
-{
-    Vertex* vertices;
-    unsigned int numVertices;
-    Texture* textures;
-    unsigned int numTextures;
-    unsigned int* indices;
-    unsigned int numIndices;
-    unsigned int VAO,VBO,EBO;
-}Mesh;
-void drawMesh(Mesh* mesh, Shader* shader)
-{
-    unsigned int diffuseNr = 1;
-    unsigned int specularNr = 1;
-    for(unsigned int i = 0; i < mesh->numTextures; i++)
+    void nuklearFrame(struct nk_context* ctx,struct nk_colorf bg)
     {
-        glActiveTexture(GL_TEXTURE0 + i);
-        char number[16];
-        char* name = mesh->textures[i].type;
-        if (strcmp(name, "texture_diffuse") == 0)
+        if (nk_begin(ctx, "Demo", nk_rect(50, 50, 230, 250),
+                NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_SCALABLE|
+                NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE))
         {
-            //number = std::to_string(diffuseNr++);
-            itoa(diffuseNr,number,10);
-            diffuseNr++;
+            enum {EASY, HARD};
+            static int op = EASY;
+            static int property = 20;
+            nk_layout_row_static(ctx, 30, 80, 1);
+            if (nk_button_label(ctx, "button"))
+                fprintf(stdout, "button pressed\n");
 
-        }
-        else if(strcmp(name, "texture_specular") == 0)
-        {
-            itoa(specularNr,number,10);
-            specularNr++;
-        }
+            nk_layout_row_dynamic(ctx, 30, 2);
+            if (nk_option_label(ctx, "easy", op == EASY)) op = EASY;
+            if (nk_option_label(ctx, "hard", op == HARD)) op = HARD;
 
-        char buffer[128];
-        snprintf(buffer,sizeof(buffer),"%s%s",name,number);
-        setInt(shader,buffer,i);
-        glBindTexture(GL_TEXTURE_2D, mesh->textures[i].id);
+            nk_layout_row_dynamic(ctx, 25, 1);
+            nk_property_int(ctx, "Compression:", 0, &property, 100, 10, 1);
+
+            nk_layout_row_dynamic(ctx, 20, 1);
+            nk_label(ctx, "background:", NK_TEXT_LEFT);
+            nk_layout_row_dynamic(ctx, 25, 1);
+            if (nk_combo_begin_color(ctx, nk_rgb_cf(bg), nk_vec2(nk_widget_width(ctx),400))) {
+                nk_layout_row_dynamic(ctx, 120, 1);
+                bg = nk_color_picker(ctx, bg, NK_RGBA);
+                nk_layout_row_dynamic(ctx, 25, 1);
+                bg.r = nk_propertyf(ctx, "#R:", 0, bg.r, 1.0f, 0.01f,0.005f);
+                bg.g = nk_propertyf(ctx, "#G:", 0, bg.g, 1.0f, 0.01f,0.005f);
+                bg.b = nk_propertyf(ctx, "#B:", 0, bg.b, 1.0f, 0.01f,0.005f);
+                bg.a = nk_propertyf(ctx, "#A:", 0, bg.a, 1.0f, 0.01f,0.005f);
+                nk_combo_end(ctx);
+            }
+        }
+        nk_end(ctx);
     }
-    glActiveTexture(GL_TEXTURE0);
-    glBindVertexArray(mesh->VAO);
-    glDrawElements(GL_TRIANGLES, mesh->numIndices, GL_UNSIGNED_INT, 0);
-    glBindVertexArray(0);
-}
-void setupMesh(Mesh* mesh)
-{
-    glGenVertexArrays(1,&mesh->VAO);
-    glGenBuffers(1, &mesh->VBO);
-    glGenBuffers(1, &mesh->EBO);
 
-    glBindVertexArray(mesh->VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, mesh->VBO);
-    glBufferData(GL_ARRAY_BUFFER, mesh->numVertices * sizeof(Vertex),&mesh->vertices[0], GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh->numIndices * sizeof(unsigned int), &mesh->indices[0], GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),(void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),(void*)offsetof(Vertex, normal));
-
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),(void*)offsetof(Vertex, texCoords));
-
-    glBindVertexArray(0);
-}
-
-typedef struct
-{
-    char* path;
-    Mesh* meshes;
-    unsigned int numMeshes;
-    char* dir; //?
-
-}Model;
-unsigned int textureFromFile(const char* path, const char* directory)
-{
-    char fullPath[512];
-    if (directory != NULL && directory[0] != '\0')
-        snprintf(fullPath, sizeof(fullPath), "%s/%s", directory, path);
-    else
-        snprintf(fullPath, sizeof(fullPath), "%s", path);
-    unsigned int textureID;
-    glGenTextures(1, &textureID);
-
-    int width, height, nrChannels;
-    unsigned char* data = stbi_load(fullPath, &width, &height, &nrChannels, 0);
-
-    if (data)
+    void frameBufferSizeCallback(GLFWwindow* window, int width, int height)
     {
-        GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
+        glViewport(0, 0, width, height);
+    }
 
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
+    #define MAX_VERTEX_BUFFER 512 * 1024
+    #define MAX_ELEMENT_BUFFER 128 * 1024
 
+    int main() {
+        glfwInit();
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        GLFWwindow* window = glfwCreateWindow(800, 600, "openglwindow", NULL, NULL);
+        if (window == NULL)
+        {
+            printf("failed to create a window");
+            glfwTerminate();
+            return -1;
+        }
+
+        glfwMakeContextCurrent(window);
+
+        if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+        {
+            printf("Failed to initialize GLAD\n");
+            return -1;
+        }
+        glEnable(GL_DEPTH_TEST);
+
+        glfwSetFramebufferSizeCallback(window, frameBufferSizeCallback);
+        glfwSetCursorPosCallback(window, mouse_callback);
+        glfwSetScrollCallback(window, scroll_callback);
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        initCamera(&camera, (vec3){0.0f, 0.0f, 3.0f}, (vec3){0.0f, 1.0f, 0.0f}, -90.0f, 0.0f);
+        Shader triShader;
+        buildShader(&triShader,"vs.vs","fs.fs");
+
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+        float borderColor[] = { 0.0f, 1.0f, 1.0f, 1.0f };
+        glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+
+
+
+
+
+        unsigned int texture;
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    }
-    else
-    {
-        printf("Texture failed to load at path: %s\n", fullPath);
-    }
+        stbi_set_flip_vertically_on_load(true);
+        int width, height, nrChannels;
+        unsigned char *data = stbi_load("migu.jpg", &width, &height, &nrChannels, 0);
 
-    stbi_image_free(data);
-
-    return textureID;
-}
-unsigned int textureFromFileCached(const char* path, const char* directory);
-Texture* loadMaterialTextures(struct aiMaterial* mat, enum aiTextureType type, const char* typeName, unsigned int* outCount, const char* directory)
-{
-    unsigned int count = aiGetMaterialTextureCount(mat, type);
-    Texture* textures = malloc(count * sizeof(Texture));
-
-    for (unsigned int i = 0; i < count; i++)
-    {
-        struct aiString string;
-        aiGetMaterialTexture(mat, type, i, &string, NULL, NULL, NULL, NULL, NULL, NULL);
-        textures[i].id = textureFromFileCached(string.data, directory);
-        //textures[i].id = textureFromFile(string.data, directory);
-        textures[i].type = strdup(typeName);
-    }
-
-    *outCount = count;
-    return textures;
-}
-
-#define MAX_CACHED_TEXTURES 512
-typedef struct {
-    char path[256];
-    unsigned int id;
-} CachedTexture;
-
-CachedTexture textureCache[MAX_CACHED_TEXTURES];
-int textureCacheCount = 0;
-
-unsigned int textureFromFileCached(const char* path, const char* directory)
-{
-    char fullPath[512];
-    if (directory != NULL && directory[0] != '\0')
-        snprintf(fullPath, sizeof(fullPath), "%s/%s", directory, path);
-    else
-        snprintf(fullPath, sizeof(fullPath), "%s", path);
-
-    for (int i = 0; i < textureCacheCount; i++)
-    {
-        if (strcmp(textureCache[i].path, fullPath) == 0)
-            return textureCache[i].id;
-    }
-
-    unsigned int id = textureFromFile(path, directory);
-
-    if (textureCacheCount < MAX_CACHED_TEXTURES)
-    {
-        strncpy(textureCache[textureCacheCount].path, fullPath, sizeof(textureCache[textureCacheCount].path) - 1);
-        textureCache[textureCacheCount].id = id;
-        textureCacheCount++;
-    }
-
-    return id;
-}
-Mesh processMesh(struct aiMesh *mesh, const struct aiScene *scene, Model* model)
-{
-    printf("processMesh: start, numVertices=%u, numFaces=%u\n", mesh->mNumVertices, mesh->mNumFaces);
-    unsigned int numVertices = mesh->mNumVertices;
-    Vertex* vertices = malloc(numVertices * sizeof(Vertex));
-
-    for (int i = 0; i < mesh->mNumVertices; i++)
-    {
-        Vertex vertex;
-        vec3 vec;
-        vec[0] = mesh->mVertices[i].x;
-        vec[1] = mesh->mVertices[i].y;
-        vec[2] = mesh->mVertices[i].z;
-        vertex.position[0] = vec[0];
-        vertex.position[1] = vec[1];
-        vertex.position[2] = vec[2];
-
-        if (mesh->mNormals != NULL)
+        if (data)
         {
-            vec[0] = mesh->mNormals[i].x;
-            vec[1] = mesh->mNormals[i].y;
-            vec[2]= mesh->mNormals[i].z;
-
-            vertex.normal[0] = vec[0];
-            vertex.normal[1] = vec[1];
-            vertex.normal[2] = vec[2];
-        }
-
-        if (mesh->mTextureCoords[0])
-        {
-            vec2 vector;
-            vector[0] = mesh->mTextureCoords[0][i].x;
-            vector[1] = mesh->mTextureCoords[0][i].y;
-            vertex.texCoords[0] = vector[0];
-            vertex.texCoords[1] = vector[1];
-
-            vec[0] = mesh->mTangents[i].x;
-            vec[1] = mesh->mTangents[i].y;
-            vec[2] = mesh->mTangents[i].z;
-            vertex.tangent[0] = vec[0];
-            vertex.tangent[1] = vec[1];
-            vertex.tangent[2] = vec[2];
-            // bitangent
-            vec[0] = mesh->mBitangents[i].x;
-            vec[1] = mesh->mBitangents[i].y;
-            vec[2] = mesh->mBitangents[i].z;
-            vertex.bitangent[0] = vec[0];
-            vertex.bitangent[1] = vec[1];
-            vertex.bitangent[2] = vec[2];
+            GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
+            glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+            printf("width %d height %d channels %d\n", width, height, nrChannels);
+            glGenerateMipmap(GL_TEXTURE_2D);
         }
         else
         {
-            vertex.texCoords[0] = 0.0f;
-            vertex.texCoords[1] = 0.0f;
+            printf("failed to load texture %s\n", stbi_failure_reason());
         }
-
-        vertices[i] = vertex;
-    }
-
-    unsigned int numIndices = mesh->mNumFaces * 3;
-    unsigned int* indices = malloc(numIndices * sizeof(unsigned int));
-    unsigned int indicesCount = 0;
-    for (int i = 0; i < mesh->mNumFaces; i++)
-    {
-        struct aiFace face = mesh->mFaces[i];
-        for (int j = 0; j < face.mNumIndices;j++)
+        stbi_image_free(data);
+        mat4 model;
+        mat4 view;
+        mat4 projection;
+        Model backpack;
+        backpack.path = "bunny.obj";
+        loadModel(&backpack);
+        printf("numMeshes: %u\n", backpack.numMeshes);
+        if (backpack.numMeshes > 0)
         {
-            indices[indicesCount] = face.mIndices[j];
-            indicesCount++;
+            printf("mesh[0] numVertices %u, numIndices %u\n",backpack.meshes[0].numVertices, backpack.meshes[0].numIndices);
         }
-    }
 
-    struct aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-    unsigned int diffuseCount, specularCount, normalCount, heightCount;
-    Texture* diffuseMaps = loadMaterialTextures(material,aiTextureType_DIFFUSE,"texture_diffuse",&diffuseCount,model->dir);
-    Texture* specularMaps = loadMaterialTextures(material,aiTextureType_SPECULAR,"texture_specular",&specularCount,model->dir);
-    Texture* normalMaps = loadMaterialTextures(material,aiTextureType_HEIGHT,"texture_normal", &normalCount,model->dir);
-    Texture* heightMaps = loadMaterialTextures(material,aiTextureType_AMBIENT,"texture_height",&heightCount,model->dir);
+        struct nk_glfw glfw = {0};
+        struct nk_context *ctx = nk_glfw3_init(&glfw, window, NK_GLFW3_INSTALL_CALLBACKS);
 
-    unsigned int numTextures = diffuseCount + specularCount + normalCount + heightCount;
-    Texture* textures =malloc(numTextures * sizeof(Texture));
+        struct nk_font_atlas *atlas;
+        nk_glfw3_font_stash_begin(&glfw, &atlas);
+        nk_glfw3_font_stash_end(&glfw);
 
-    unsigned int offset = 0;
-    memcpy(textures+offset,diffuseMaps,diffuseCount * sizeof(Texture));
-    offset += diffuseCount;
-    memcpy(textures+offset,specularMaps,specularCount * sizeof(Texture));
-    offset += specularCount;
-    memcpy(textures+offset,normalMaps,normalCount * sizeof(Texture));
-    offset += normalCount;
-    memcpy(textures+offset,heightMaps,heightCount * sizeof(Texture));
+        struct nk_colorf bg;
 
-    free(diffuseMaps); free(specularMaps); free(normalMaps); free(heightMaps);
+        while (!glfwWindowShouldClose(window))
+        {
 
-    Mesh newMesh = (Mesh){vertices, numVertices, textures, numTextures, indices, numIndices};
-    setupMesh(&newMesh);
-    return newMesh;
-}
-void processNode(struct aiNode *node, const struct aiScene *scene, Model* model, unsigned int* meshIndex)
-{
-    for(unsigned int i = 0; i < node->mNumMeshes; i++)
-    {
-        struct aiMesh *mesh = scene->mMeshes[node->mMeshes[i]];
-        model->meshes[*meshIndex] = processMesh(mesh, scene, model);
-        (*meshIndex)++;
-    }
-    // then do the same for each of its children
-    for(unsigned int i = 0; i < node->mNumChildren; i++)
-    {
-        processNode(node->mChildren[i], scene, model, meshIndex);
-    }
-}
-void loadModel(Model* model)
-{
-    const struct aiScene* scene = aiImportFile(model->path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
-    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
-    {
-        printf("very bad assimp error: %s\n", aiGetErrorString());
-        return;
-    }
+            nk_glfw3_new_frame(&glfw);
+            cameraInput(window);
+            nuklearFrame(ctx,bg);
+            glClearColor(bg.r, bg.g, bg.b, bg.a);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            glBindTexture(GL_TEXTURE_2D, texture);
+            useShader(&triShader);
 
-    char* lastSlash = strrchr(model->path, '/');
-    if (lastSlash != NULL)
-    {
-        size_t dirLength = lastSlash - model->path;
-        model->dir = malloc(dirLength + 1);
-        strncpy(model->dir, model->path, dirLength);
-        model->dir[dirLength] = '\0';
-    }
-    else
-    {
-        model->dir = malloc(1);
-        model->dir[0] = '\0';
-    }
 
-    model->numMeshes = scene->mNumMeshes;
-    model->meshes = malloc(sizeof(Mesh) * model->numMeshes);
-    unsigned int meshIndex = 0;
-    processNode(scene->mRootNode, scene, model, &meshIndex);
-    aiReleaseImport(scene);
-}
-void drawModel(Model* model, Shader* shader)
-{
-    for (int i = 0; i < model->numMeshes; i++)
-    {
-        drawMesh(&model->meshes[i],shader);
-    }
-}
+            vec3 center;
+            glm_vec3_add(camera.cameraPos, camera.cameraFront, center);
+            glm_lookat(camera.cameraPos, center, camera.cameraUp, view);
 
-void frameBufferSizeCallback(GLFWwindow* window, int width, int height)
-{
-    glViewport(0, 0, width, height);
-}
+            glm_perspective(glm_rad(camera.fov), (float)SCREEN_WIDTH / (float)SCREEN_HEIGHT, 0.1f, 100.0f, projection);
+            //setMat4(&triShader,"model",model);
+            setMat4(&triShader,"view",view);
+            setMat4(&triShader,"projection",projection);
 
-int main() {
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    GLFWwindow* window = glfwCreateWindow(800, 600, "openglwindow", NULL, NULL);
-    if (window == NULL)
-    {
-        printf("failed to create a window");
+            mat4 backpackModel;
+            glm_mat4_identity(backpackModel);
+            setMat4(&triShader, "model", backpackModel);
+            drawModel(&backpack, &triShader);
+            GLenum err;
+            while ((err = glGetError()) != GL_NO_ERROR)
+                printf("error %x\n", err);
+
+
+            nk_glfw3_render(&glfw, NK_ANTI_ALIASING_ON, MAX_VERTEX_BUFFER, MAX_ELEMENT_BUFFER);
+            glfwSwapBuffers(window);
+            glfwPollEvents();
+        }
+
         glfwTerminate();
-        return -1;
+        return 0;
     }
-
-    glfwMakeContextCurrent(window);
-
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        printf("Failed to initialize GLAD\n");
-        return -1;
-    }
-    glEnable(GL_DEPTH_TEST);
-
-    glfwSetFramebufferSizeCallback(window, frameBufferSizeCallback);
-    glfwSetCursorPosCallback(window, mouse_callback);
-    glfwSetScrollCallback(window, scroll_callback);
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    initCamera(&camera, (vec3){0.0f, 0.0f, 3.0f}, (vec3){0.0f, 1.0f, 0.0f}, -90.0f, 0.0f);
-    Shader triShader;
-    buildShader(&triShader,"vs.vs","fs.fs");
-
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-
-    float borderColor[] = { 0.0f, 1.0f, 1.0f, 1.0f };
-    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-
-
-
-
-
-    unsigned int texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    stbi_set_flip_vertically_on_load(true);
-    int width, height, nrChannels;
-    unsigned char *data = stbi_load("migu.jpg", &width, &height, &nrChannels, 0);
-
-    if (data)
-    {
-        GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
-        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-        printf("width %d height %d channels %d\n", width, height, nrChannels);
-        glGenerateMipmap(GL_TEXTURE_2D);
-    }
-    else
-    {
-        printf("failed to load texture %s\n", stbi_failure_reason());
-    }
-    stbi_image_free(data);
-    mat4 model;
-    mat4 view;
-    mat4 projection;
-    Model backpack;
-    backpack.path = "bunny.obj";
-    loadModel(&backpack);
-    printf("numMeshes: %u\n", backpack.numMeshes);
-    if (backpack.numMeshes > 0)
-    {
-        printf("mesh[0] numVertices %u, numIndices %u\n",backpack.meshes[0].numVertices, backpack.meshes[0].numIndices);
-    }
-    while (!glfwWindowShouldClose(window))
-    {
-        cameraInput(window);
-
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        useShader(&triShader);
-
-
-        vec3 center;
-        glm_vec3_add(camera.cameraPos, camera.cameraFront, center);
-        glm_lookat(camera.cameraPos, center, camera.cameraUp, view);
-
-        glm_perspective(glm_rad(camera.fov), (float)SCREEN_WIDTH / (float)SCREEN_HEIGHT, 0.1f, 100.0f, projection);
-        //setMat4(&triShader,"model",model);
-        setMat4(&triShader,"view",view);
-        setMat4(&triShader,"projection",projection);
-
-
-        mat4 backpackModel;
-        glm_mat4_identity(backpackModel);
-        setMat4(&triShader, "model", backpackModel);
-        drawModel(&backpack, &triShader);
-        GLenum err;
-        while ((err = glGetError()) != GL_NO_ERROR)
-            printf("error %x\n", err);
-
-
-
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-    }
-
-    glfwTerminate();
-    return 0;
-}
 

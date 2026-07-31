@@ -13,6 +13,8 @@ add_executable(renderer main.c
         shader.c
         stb_image.h
         camera.c
-        camera.h)
+        camera.h
+        model.c
+        model.h)
 
 target_link_libraries(renderer PRIVATE glfw glad::glad cglm::cglm assimp::assimp)
