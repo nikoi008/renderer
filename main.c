@@ -58,7 +58,7 @@ void drawMesh(Mesh* mesh, Shader* shader)
         }
 
         char buffer[128];
-        snprintf(buffer,sizeof(buffer),"material.%s%s",name,number);
+        snprintf(buffer,sizeof(buffer),"%s%s",name,number);
         setInt(shader,buffer,i);
         glBindTexture(GL_TEXTURE_2D, mesh->textures[i].id);
     }
@@ -102,8 +102,10 @@ typedef struct
 unsigned int textureFromFile(const char* path, const char* directory)
 {
     char fullPath[512];
-    snprintf(fullPath, sizeof(fullPath), "%s/%s", directory, path);
-
+    if (directory != NULL && directory[0] != '\0')
+        snprintf(fullPath, sizeof(fullPath), "%s/%s", directory, path);
+    else
+        snprintf(fullPath, sizeof(fullPath), "%s", path);
     unsigned int textureID;
     glGenTextures(1, &textureID);
 
@@ -132,6 +134,7 @@ unsigned int textureFromFile(const char* path, const char* directory)
 
     return textureID;
 }
+unsigned int textureFromFileCached(const char* path, const char* directory);
 Texture* loadMaterialTextures(struct aiMaterial* mat, enum aiTextureType type, const char* typeName, unsigned int* outCount, const char* directory)
 {
     unsigned int count = aiGetMaterialTextureCount(mat, type);
@@ -141,16 +144,52 @@ Texture* loadMaterialTextures(struct aiMaterial* mat, enum aiTextureType type, c
     {
         struct aiString string;
         aiGetMaterialTexture(mat, type, i, &string, NULL, NULL, NULL, NULL, NULL, NULL);
-
-        textures[i].id = textureFromFile(string.data, directory);
+        textures[i].id = textureFromFileCached(string.data, directory);
+        //textures[i].id = textureFromFile(string.data, directory);
         textures[i].type = strdup(typeName);
     }
 
     *outCount = count;
     return textures;
 }
-Mesh processMesh(struct aiMesh *mesh, const struct aiScene *scene,Model* model)
+
+#define MAX_CACHED_TEXTURES 512
+typedef struct {
+    char path[256];
+    unsigned int id;
+} CachedTexture;
+
+CachedTexture textureCache[MAX_CACHED_TEXTURES];
+int textureCacheCount = 0;
+
+unsigned int textureFromFileCached(const char* path, const char* directory)
 {
+    char fullPath[512];
+    if (directory != NULL && directory[0] != '\0')
+        snprintf(fullPath, sizeof(fullPath), "%s/%s", directory, path);
+    else
+        snprintf(fullPath, sizeof(fullPath), "%s", path);
+
+    for (int i = 0; i < textureCacheCount; i++)
+    {
+        if (strcmp(textureCache[i].path, fullPath) == 0)
+            return textureCache[i].id;
+    }
+
+    unsigned int id = textureFromFile(path, directory);
+
+    if (textureCacheCount < MAX_CACHED_TEXTURES)
+    {
+        strncpy(textureCache[textureCacheCount].path, fullPath, sizeof(textureCache[textureCacheCount].path) - 1);
+        textureCache[textureCacheCount].id = id;
+        textureCacheCount++;
+    }
+
+    return id;
+}
+Mesh processMesh(struct aiMesh *mesh, const struct aiScene *scene, Model* model)
+{
+    printf("processMesh: start, numVertices=%u, numFaces=%u\n", mesh->mNumVertices, mesh->mNumFaces);
     unsigned int numVertices = mesh->mNumVertices;
     Vertex* vertices = malloc(numVertices * sizeof(Vertex));
 
@@ -230,7 +269,6 @@ Mesh processMesh(struct aiMesh *mesh, const struct aiScene *scene,Model* model)
     unsigned int numTextures = diffuseCount + specularCount + normalCount + heightCount;
     Texture* textures =malloc(numTextures * sizeof(Texture));
 
-
     unsigned int offset = 0;
     memcpy(textures+offset,diffuseMaps,diffuseCount * sizeof(Texture));
     offset += diffuseCount;
@@ -242,25 +280,27 @@ Mesh processMesh(struct aiMesh *mesh, const struct aiScene *scene,Model* model)
 
     free(diffuseMaps); free(specularMaps); free(normalMaps); free(heightMaps);
 
-    return (Mesh){vertices,numVertices, textures, numTextures,indices,numIndices};
+    Mesh newMesh = (Mesh){vertices, numVertices, textures, numTextures, indices, numIndices};
+    setupMesh(&newMesh);
+    return newMesh;
 }
-void processNode(struct aiNode *node, const struct aiScene *scene,Model* model)
+void processNode(struct aiNode *node, const struct aiScene *scene, Model* model, unsigned int* meshIndex)
 {
     for(unsigned int i = 0; i < node->mNumMeshes; i++)
     {
         struct aiMesh *mesh = scene->mMeshes[node->mMeshes[i]];
-        //Model->meshes[i] = processMesh(mesh, scene);
-        model->meshes[i] = processMesh(mesh,scene,model);
+        model->meshes[*meshIndex] = processMesh(mesh, scene, model);
+        (*meshIndex)++;
     }
     // then do the same for each of its children
     for(unsigned int i = 0; i < node->mNumChildren; i++)
     {
-        processNode(node->mChildren[i], scene,model);
+        processNode(node->mChildren[i], scene, model, meshIndex);
     }
 }
 void loadModel(Model* model)
 {
-    const struct aiScene* scene = aiImportFile(model->path, aiProcess_Triangulate | aiProcess_FlipUVs);
+    const struct aiScene* scene = aiImportFile(model->path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
     {
         printf("very bad assimp error: %s\n", aiGetErrorString());
@@ -283,7 +323,8 @@ void loadModel(Model* model)
 
     model->numMeshes = scene->mNumMeshes;
     model->meshes = malloc(sizeof(Mesh) * model->numMeshes);
-    processNode(scene->mRootNode, scene, model);
+    unsigned int meshIndex = 0;
+    processNode(scene->mRootNode, scene, model, &meshIndex);
     aiReleaseImport(scene);
 }
 void drawModel(Model* model, Shader* shader)
@@ -300,7 +341,6 @@ void frameBufferSizeCallback(GLFWwindow* window, int width, int height)
 }
 
 int main() {
-
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -320,81 +360,17 @@ int main() {
         printf("Failed to initialize GLAD\n");
         return -1;
     }
-
     glEnable(GL_DEPTH_TEST);
 
     glfwSetFramebufferSizeCallback(window, frameBufferSizeCallback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
     initCamera(&camera, (vec3){0.0f, 0.0f, 3.0f}, (vec3){0.0f, 1.0f, 0.0f}, -90.0f, 0.0f);
-
     Shader triShader;
     buildShader(&triShader,"vs.vs","fs.fs");
 
 
-    float vertices[] = {
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-
-        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
-    };
-
-    unsigned int indices[] = {
-        0, 1, 3, // first triangle
-        1, 2, 3  // second triangle
-    };
-
-    vec3 cubePositions[] = {
-        {0.0f, 0.0f, 0.0f},
-        {2.0f, 5.0f, -15.0f},
-        {-1.5f, -2.2f, -2.5f},
-        {-3.8f, -2.0f, -12.3f},
-        {2.4f, -0.4f, -3.5f},
-        {-1.7f, 3.0f, -7.5f},
-        {1.3f, -2.0f, -2.5f},
-        {1.5f, 2.0f, -2.5f},
-        {1.5f, 0.2f, -1.5f},
-        {-1.3f, 1.0f, -1.5f}
-    };
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 
@@ -406,29 +382,9 @@ int main() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 
-    unsigned int VAO, VBO, EBO;
 
-    glGenVertexArrays(1, &VAO);
 
-    glGenBuffers(1, &VBO);
 
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    glGenBuffers(1, &EBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-    glEnableVertexAttribArray(2);
-    glBindVertexArray(0);
 
     unsigned int texture;
     glGenTextures(1, &texture);
@@ -453,13 +409,17 @@ int main() {
         printf("failed to load texture %s\n", stbi_failure_reason());
     }
     stbi_image_free(data);
-
     mat4 model;
     mat4 view;
     mat4 projection;
     Model backpack;
-    backpack.path = "backpack.obj";
+    backpack.path = "bunny.obj";
     loadModel(&backpack);
+    printf("numMeshes: %u\n", backpack.numMeshes);
+    if (backpack.numMeshes > 0)
+    {
+        printf("mesh[0] numVertices %u, numIndices %u\n",backpack.meshes[0].numVertices, backpack.meshes[0].numIndices);
+    }
     while (!glfwWindowShouldClose(window))
     {
         cameraInput(window);
@@ -475,7 +435,6 @@ int main() {
         glm_lookat(camera.cameraPos, center, camera.cameraUp, view);
 
         glm_perspective(glm_rad(camera.fov), (float)SCREEN_WIDTH / (float)SCREEN_HEIGHT, 0.1f, 100.0f, projection);
-
         //setMat4(&triShader,"model",model);
         setMat4(&triShader,"view",view);
         setMat4(&triShader,"projection",projection);
@@ -485,29 +444,15 @@ int main() {
         glm_mat4_identity(backpackModel);
         setMat4(&triShader, "model", backpackModel);
         drawModel(&backpack, &triShader);
+        GLenum err;
+        while ((err = glGetError()) != GL_NO_ERROR)
+            printf("error %x\n", err);
 
-
-        glBindVertexArray(VAO);
-        /*for (int i = 0; i < 10; i++)
-        {
-            //mat4 model;
-            glm_mat4_identity(model);
-            glm_translate(model,cubePositions[i]);
-            float angle = 20.0f * i;
-            glm_rotate(model,(float)glfwGetTime() * glm_rad(angle),(vec3){1.0f,0.3f,0.5f});
-            //setMat4(&triShader,"model",model);
-            glDrawArrays(GL_TRIANGLES, 0, 36);
-        }*/
 
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &EBO);
-    //glDeleteProgram(shaderProgram);
 
     glfwTerminate();
     return 0;
