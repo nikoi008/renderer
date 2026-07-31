@@ -22,7 +22,7 @@
     #include "nuklear.h"
     #include "nuklear_glfw_gl3.h"
 
-    void nuklearFrame(struct nk_context* ctx,struct nk_colorf bg)
+    void nuklearFrame(struct nk_context* ctx,struct nk_colorf* bg)
     {
         if (nk_begin(ctx, "Demo", nk_rect(50, 50, 230, 250),
                 NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_SCALABLE|
@@ -45,14 +45,14 @@
             nk_layout_row_dynamic(ctx, 20, 1);
             nk_label(ctx, "background:", NK_TEXT_LEFT);
             nk_layout_row_dynamic(ctx, 25, 1);
-            if (nk_combo_begin_color(ctx, nk_rgb_cf(bg), nk_vec2(nk_widget_width(ctx),400))) {
+            if (nk_combo_begin_color(ctx, nk_rgba_cf(*bg), nk_vec2(nk_widget_width(ctx),400))) {
                 nk_layout_row_dynamic(ctx, 120, 1);
-                bg = nk_color_picker(ctx, bg, NK_RGBA);
+                *bg = nk_color_picker(ctx, *bg, NK_RGBA);
                 nk_layout_row_dynamic(ctx, 25, 1);
-                bg.r = nk_propertyf(ctx, "#R:", 0, bg.r, 1.0f, 0.01f,0.005f);
-                bg.g = nk_propertyf(ctx, "#G:", 0, bg.g, 1.0f, 0.01f,0.005f);
-                bg.b = nk_propertyf(ctx, "#B:", 0, bg.b, 1.0f, 0.01f,0.005f);
-                bg.a = nk_propertyf(ctx, "#A:", 0, bg.a, 1.0f, 0.01f,0.005f);
+                bg->r = nk_propertyf(ctx, "#R:", 0, bg->r, 1.0f, 0.01f,0.005f);
+                bg->g = nk_propertyf(ctx, "#G:", 0, bg->g, 1.0f, 0.01f,0.005f);
+                bg->b = nk_propertyf(ctx, "#B:", 0, bg->b, 1.0f, 0.01f,0.005f);
+                bg->a = nk_propertyf(ctx, "#A:", 0, bg->a, 1.0f, 0.01f,0.005f);
                 nk_combo_end(ctx);
             }
         }
@@ -72,6 +72,7 @@
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
         GLFWwindow* window = glfwCreateWindow(800, 600, "openglwindow", NULL, NULL);
         if (window == NULL)
         {
@@ -140,7 +141,7 @@
         mat4 view;
         mat4 projection;
         Model backpack;
-        backpack.path = "bunny.obj";
+        backpack.path = "e.glb";
         loadModel(&backpack);
         printf("numMeshes: %u\n", backpack.numMeshes);
         if (backpack.numMeshes > 0)
@@ -156,14 +157,16 @@
         nk_glfw3_font_stash_end(&glfw);
 
         struct nk_colorf bg;
-
+        bg.a = 0.0f;
         while (!glfwWindowShouldClose(window))
         {
 
             nk_glfw3_new_frame(&glfw);
             cameraInput(window);
-            nuklearFrame(ctx,bg);
-            glClearColor(bg.r, bg.g, bg.b, bg.a);
+            nuklearFrame(ctx,&bg);
+            //glClearColor(1.0f,0.0f,0.0f,1.0f);
+
+            glClearColor(bg.r, bg.g, bg.b, 1.0f - bg.a);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             glEnable(GL_DEPTH_TEST);
             glBindTexture(GL_TEXTURE_2D, texture);
