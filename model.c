@@ -102,7 +102,43 @@ unsigned int textureFromFile(const char* path, const char* directory)
     return textureID;
 }
 
-Texture* loadMaterialTextures(struct aiMaterial* mat, enum aiTextureType type, const char* typeName, unsigned int* outCount, const char* directory)
+unsigned int textureFromGLB(struct aiTexture* texture)
+{
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+
+    if (texture->mHeight == 0)
+    {
+        int width, height, nrChannels;
+        unsigned char* data = stbi_load_from_memory((unsigned char*)texture->pcData,texture->mWidth,&width,&height,&nrChannels,0);
+        if (data)
+        {
+            GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
+            glTexImage2D(GL_TEXTURE_2D, 0, format,width,height,0,format,GL_UNSIGNED_BYTE,data);
+            glGenerateMipmap(GL_TEXTURE_2D);
+            stbi_image_free(data);
+        }
+        else
+        {
+            printf("failed %s\n", stbi_failure_reason());
+        }
+    }
+    else
+    {
+        glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,texture->mWidth,texture->mHeight,0,GL_RGBA,GL_UNSIGNED_BYTE,texture->pcData);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+
+    return textureID;
+}
+
+Texture* loadMaterialTextures(struct aiMaterial* mat, enum aiTextureType type, const char* typeName, unsigned int* outCount, const char* directory, const struct aiScene* scene)
 {
     unsigned int count = aiGetMaterialTextureCount(mat, type);
     Texture* textures = malloc(count * sizeof(Texture));
@@ -111,15 +147,23 @@ Texture* loadMaterialTextures(struct aiMaterial* mat, enum aiTextureType type, c
     {
         struct aiString string;
         aiGetMaterialTexture(mat, type, i, &string, NULL, NULL, NULL, NULL, NULL, NULL);
-        textures[i].id = textureFromFileCached(string.data, directory);
-        //textures[i].id = textureFromFile(string.data, directory);
+
+        if (string.data[0] == '*')
+        {
+            int texIndex = atoi(string.data + 1);
+            struct aiTexture* embeddedTex = scene->mTextures[texIndex];
+            textures[i].id = textureFromGLB(embeddedTex);
+        }
+        else
+        {
+            textures[i].id = textureFromFileCached(string.data, directory);
+        }
         textures[i].type = strdup(typeName);
     }
 
     *outCount = count;
     return textures;
 }
-
 
 
 CachedTexture textureCache[MAX_CACHED_TEXTURES];
@@ -224,11 +268,10 @@ Mesh processMesh(struct aiMesh *mesh, const struct aiScene *scene, Model* model)
 
     struct aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
     unsigned int diffuseCount, specularCount, normalCount, heightCount;
-    Texture* diffuseMaps = loadMaterialTextures(material,aiTextureType_DIFFUSE,"texture_diffuse",&diffuseCount,model->dir);
-    Texture* specularMaps = loadMaterialTextures(material,aiTextureType_SPECULAR,"texture_specular",&specularCount,model->dir);
-    Texture* normalMaps = loadMaterialTextures(material,aiTextureType_HEIGHT,"texture_normal", &normalCount,model->dir);
-    Texture* heightMaps = loadMaterialTextures(material,aiTextureType_AMBIENT,"texture_height",&heightCount,model->dir);
-
+    Texture* diffuseMaps = loadMaterialTextures(material,aiTextureType_DIFFUSE,"texture_diffuse",&diffuseCount,model->dir,scene);
+    Texture* specularMaps = loadMaterialTextures(material,aiTextureType_SPECULAR,"texture_specular",&specularCount,model->dir,scene);
+    Texture* normalMaps = loadMaterialTextures(material,aiTextureType_HEIGHT,"texture_normal",&normalCount,model->dir,scene);
+    Texture* heightMaps = loadMaterialTextures(material,aiTextureType_AMBIENT,"texture_height",&heightCount,model->dir,scene);
     unsigned int numTextures = diffuseCount + specularCount + normalCount + heightCount;
     Texture* textures =malloc(numTextures * sizeof(Texture));
 
@@ -263,7 +306,7 @@ void processNode(struct aiNode *node, const struct aiScene *scene, Model* model,
 }
 void loadModel(Model* model)
 {
-    const struct aiScene* scene = aiImportFile(model->path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
+    const struct aiScene* scene = aiImportFile(model->path, aiProcess_Triangulate | aiProcess_GenSmoothNormals  | aiProcess_CalcTangentSpace);
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
     {
         printf("very bad assimp error: %s\n", aiGetErrorString());

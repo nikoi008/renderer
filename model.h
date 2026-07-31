@@ -52,7 +52,7 @@ void setupMesh(Mesh* mesh);
 
 unsigned int textureFromFile(const char* path, const char* directory);
 
-Texture* loadMaterialTextures(struct aiMaterial* mat, enum aiTextureType type, const char* typeName, unsigned int* outCount, const char* directory);
+Texture* loadMaterialTextures(struct aiMaterial* mat, enum aiTextureType type, const char* typeName, unsigned int* outCount, const char* directory,const struct aiScene* scene);
 
 unsigned int textureFromFileCached(const char* path, const char* directory);
 
