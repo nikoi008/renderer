@@ -21,19 +21,47 @@
     #define NK_GLFW_GL3_IMPLEMENTATION
     #include "nuklear.h"
     #include "nuklear_glfw_gl3.h"
+    #include <windows.h>
+
+void freeMesh(Mesh* mesh)
+{
+    free(mesh->vertices);
+    free(mesh->indices);
+
+    for (int i = 0; i < mesh->numTextures; i++)
+        free(mesh->textures[i].type);
+    free(mesh->textures);
+
+    glDeleteVertexArrays(1,&mesh->VAO);
+    glDeleteBuffers(1,&mesh->VBO);
+    glDeleteBuffers(1,&mesh->EBO);
+}
+
+void freeModel(Model* model)
+{
+    for (int i = 0; i < model->numMeshes; i++)
+        freeMesh(&model->meshes[i]);
+
+    free(model->meshes);
+    free(model->dir);
+
+    model->meshes = NULL;
+    model->numMeshes = 0;
+    model->dir = NULL;
+}
 void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
 {
     struct nk_font_atlas *atlas;
     nk_glfw3_font_stash_begin(glfw, &atlas);
 
     struct nk_font_config config = nk_font_config(0);
-    struct nk_font *font = nk_font_atlas_add_default(atlas, 13 * scale, &config);
+    struct nk_font *font = nk_font_atlas_add_default(atlas,13 * scale,&config);
 
     nk_glfw3_font_stash_end(glfw);
 
     nk_style_set_font(ctx, &font->handle);
 }
-    void nuklearFrame(struct nk_context* ctx,struct nk_colorf* bg, GLFWwindow* window, struct nk_glfw* glfw)
+    void nuklearFrame(struct nk_context* ctx,struct nk_colorf* bg, GLFWwindow* window, struct nk_glfw* glfw, Model* model)
 
     {
         int width, height;
@@ -41,18 +69,35 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
 
         float scaleX = (float)width / 800;
         float scaleY = (float)height / 600;
-        struct nk_rect bounds = nk_rect(50, 50, 230 * scaleX, 250 * scaleY);
-        nk_window_set_bounds(ctx, "Demo", bounds);
+        struct nk_rect bounds = nk_rect(0, 0, 230 * scaleX, 250 * scaleY);
+        nk_window_set_bounds(ctx, "Config", bounds);
         resizeFont(glfw,ctx,scaleY);
-        if (nk_begin(ctx, "Demo", nk_rect(50, 50, 230, 250),NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_SCALABLE|NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE))
+        if (nk_begin(ctx, "Config", nk_rect(0, 0, 230, 250),NK_WINDOW_BORDER|NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE|NK_WINDOW_SCALABLE))
         {
 
             enum {EASY, HARD};
             static int op = EASY;
             static int property = 20;
             nk_layout_row_static(ctx, 30 * scaleY, 80 * scaleX, 1);
-            if (nk_button_label(ctx, "button"))
-                fprintf(stdout, "button pressed\n");
+            if (nk_button_label(ctx, "Load Model"))
+            {
+                OPENFILENAMEA f = {sizeof(OPENFILENAMEA)};
+                f.lpstrFilter = "glb files\0*.glb\0obj files\0*.obj\0gltf files\0*.gltf\0";
+                f.lpstrTitle = "Load Model";
+                char buff[MAX_PATH] = {};
+                f.nMaxFile = sizeof(buff);
+                f.lpstrFile = buff;
+                GetOpenFileNameA(&f);
+                printf("%s",f.lpstrFile);
+                freeModel(model);
+                model->path = f.lpstrFile;
+                loadModel(model);
+                printf("numMeshes: %u\n",model->numMeshes);
+                if (model->numMeshes > 0)
+                {
+                    printf("mesh[0] numVertices %u, numIndices %u\n",model->meshes[0].numVertices,model->meshes[0].numIndices);
+                }
+            }
 
             nk_layout_row_dynamic(ctx, 30 * scaleY, 2);
             if (nk_option_label(ctx, "easy", op == EASY)) op = EASY;
@@ -64,10 +109,10 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
             nk_layout_row_dynamic(ctx, 20 *scaleY, 1);
             nk_label(ctx, "background:", NK_TEXT_LEFT);
             nk_layout_row_dynamic(ctx, 25 * scaleY, 1);
-            if (nk_combo_begin_color(ctx, nk_rgba_cf(*bg), nk_vec2(nk_widget_width(ctx),400))) {
+            if (nk_combo_begin_color(ctx, nk_rgba_cf(*bg), nk_vec2(nk_widget_width(ctx),400 * scaleY))) {
                 nk_layout_row_dynamic(ctx, 120 * scaleY, 1);
                 *bg = nk_color_picker(ctx, *bg, NK_RGBA);
-                nk_layout_row_dynamic(ctx, 25, 1);
+                nk_layout_row_dynamic(ctx, 25 * scaleY, 1);
                 bg->r = nk_propertyf(ctx, "#R:", 0, bg->r, 1.0f, 0.01f,0.005f);
                 bg->g = nk_propertyf(ctx, "#G:", 0, bg->g, 1.0f, 0.01f,0.005f);
                 bg->b = nk_propertyf(ctx, "#B:", 0, bg->b, 1.0f, 0.01f,0.005f);
@@ -143,17 +188,10 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         stbi_set_flip_vertically_on_load(true);
         int width, height, nrChannels;
-        mat4 model;
         mat4 view;
         mat4 projection;
-        Model backpack;
-        backpack.path = "h.glb";
-        loadModel(&backpack);
-        printf("numMeshes: %u\n", backpack.numMeshes);
-        if (backpack.numMeshes > 0)
-        {
-            printf("mesh[0] numVertices %u, numIndices %u\n",backpack.meshes[0].numVertices, backpack.meshes[0].numIndices);
-        }
+        Model model;
+
 
         struct nk_glfw glfw = {0};
         struct nk_context *ctx = nk_glfw3_init(&glfw, window, NK_GLFW3_INSTALL_CALLBACKS);
@@ -166,8 +204,8 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
 
             nk_glfw3_new_frame(&glfw);
             cameraInput(window);
-            nuklearFrame(ctx,&bg,window,&glfw);
-            //glClearColor(1.0f,0.0f,0.0f,1.0f);
+            nuklearFrame(ctx,&bg,window,&glfw,&model);
+            glClearColor(1.0f,0.0f,0.0f,1.0f);
 
             glClearColor(bg.r, bg.g, bg.b, 1.0f - bg.a);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -191,7 +229,7 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
 
 
             setMat4(&triShader, "model", backpackModel);
-            drawModel(&backpack, &triShader);
+            drawModel(&model, &triShader);
             GLenum err;
             while ((err = glGetError()) != GL_NO_ERROR)
                 printf("error %x\n", err);

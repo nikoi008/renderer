@@ -17,4 +17,4 @@ add_executable(renderer main.c
         model.c
         model.h)
 
-target_link_libraries(renderer PRIVATE glfw glad::glad cglm::cglm assimp::assimp)
+target_link_libraries(renderer PRIVATE glfw glad::glad cglm::cglm assimp::assimp comdlg32 ole32)
