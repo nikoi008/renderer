@@ -114,8 +114,12 @@ unsigned int textureFromGLB(struct aiTexture* texture)
         unsigned char* data = stbi_load_from_memory((unsigned char*)texture->pcData,texture->mWidth,&width,&height,&nrChannels,0);
         if (data)
         {
-            GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
-            glTexImage2D(GL_TEXTURE_2D, 0, format,width,height,0,format,GL_UNSIGNED_BYTE,data);
+            GLenum format;
+            if (nrChannels == 1) format = GL_RED;
+            else if (nrChannels == 2) format = GL_RG;
+            else if (nrChannels == 3) format = GL_RGB;
+            else format = GL_RGBA;
+            glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
             glGenerateMipmap(GL_TEXTURE_2D);
             stbi_image_free(data);
         }
@@ -165,7 +169,6 @@ Texture* loadMaterialTextures(struct aiMaterial* mat, enum aiTextureType type, c
     return textures;
 }
 
-
 CachedTexture textureCache[MAX_CACHED_TEXTURES];
 int textureCacheCount = 0;
 
@@ -196,7 +199,6 @@ unsigned int textureFromFileCached(const char* path, const char* directory)
 }
 Mesh processMesh(struct aiMesh *mesh, const struct aiScene *scene, Model* model)
 {
-    printf("processMesh: start, numVertices=%u, numFaces=%u\n", mesh->mNumVertices, mesh->mNumFaces);
     unsigned int numVertices = mesh->mNumVertices;
     Vertex* vertices = malloc(numVertices * sizeof(Vertex));
 
@@ -230,19 +232,28 @@ Mesh processMesh(struct aiMesh *mesh, const struct aiScene *scene, Model* model)
             vertex.texCoords[0] = vector[0];
             vertex.texCoords[1] = vector[1];
 
-            vec[0] = mesh->mTangents[i].x;
-            vec[1] = mesh->mTangents[i].y;
-            vec[2] = mesh->mTangents[i].z;
-            vertex.tangent[0] = vec[0];
-            vertex.tangent[1] = vec[1];
-            vertex.tangent[2] = vec[2];
-            // bitangent
-            vec[0] = mesh->mBitangents[i].x;
-            vec[1] = mesh->mBitangents[i].y;
-            vec[2] = mesh->mBitangents[i].z;
-            vertex.bitangent[0] = vec[0];
-            vertex.bitangent[1] = vec[1];
-            vertex.bitangent[2] = vec[2];
+            if (mesh->mTangents != NULL && mesh->mBitangents != NULL)
+            {
+                vec[0] = mesh->mTangents[i].x;
+                vec[1] = mesh->mTangents[i].y;
+                vec[2] = mesh->mTangents[i].z;
+                vertex.tangent[0] = vec[0];
+                vertex.tangent[1] = vec[1];
+                vertex.tangent[2] = vec[2];
+
+                vec[0] = mesh->mBitangents[i].x;
+                vec[1] = mesh->mBitangents[i].y;
+                vec[2] = mesh->mBitangents[i].z;
+                vertex.bitangent[0] = vec[0];
+                vertex.bitangent[1] = vec[1];
+                vertex.bitangent[2] = vec[2];
+            }
+            else
+            {
+                printf("no tangents or bitangents");
+                vertex.tangent[0] = vertex.tangent[1] = vertex.tangent[2] = 0.0f;
+                vertex.bitangent[0] = vertex.bitangent[1] = vertex.bitangent[2] = 0.0f;
+            }
         }
         else
         {
