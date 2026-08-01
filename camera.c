@@ -42,33 +42,39 @@ void initCamera(Camera *camera, vec3 pos, vec3 up, float yaw, float pitch)
 
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 {
-    float xpos = (float)xposIn;
-    float ypos = (float)yposIn;
-
-    if (firstMouse)
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
     {
+        float xpos = (float)xposIn;
+        float ypos = (float)yposIn;
+
+        if (firstMouse)
+        {
+            lastX = xpos;
+            lastY = ypos;
+            firstMouse = false;
+        }
+
+        float xoffset = xpos - lastX;
+        float yoffset = lastY - ypos;
         lastX = xpos;
         lastY = ypos;
-        firstMouse = false;
+
+        xoffset *= camera.mouseSensitivity;
+        yoffset *= camera.mouseSensitivity;
+
+        camera.yaw += xoffset;
+        camera.pitch += yoffset;
+
+        if (camera.pitch > 89.0f) camera.pitch = 89.0f;
+        if (camera.pitch < -89.0f) camera.pitch = -89.0f;
+
+        updateCameraVectors(&camera);
     }
-
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; // reversed: y ranges bottom to top
-    lastX = xpos;
-    lastY = ypos;
-
-    xoffset *= camera.mouseSensitivity;
-    yoffset *= camera.mouseSensitivity;
-
-    camera.yaw   += xoffset;
-    camera.pitch += yoffset;
-
-    if (camera.pitch > 89.0f)  camera.pitch = 89.0f;
-    if (camera.pitch < -89.0f) camera.pitch = -89.0f;
-
-    updateCameraVectors(&camera);
+    else
+    {
+        firstMouse = true;
+    }
 }
-
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
     camera.fov -= (float)yoffset;
