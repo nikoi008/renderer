@@ -1,5 +1,5 @@
 # C OpenGl renderer
-[](images/banner.png) 
+![](images/banner.png) 
 # What is this?
 This project is a renderer designed to load 3d model files!  
 It currently has best support for `.glb` files, but support for `.obj` and `gltf` files are available though require extra setup
