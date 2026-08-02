@@ -22,6 +22,15 @@
     #include "nuklear.h"
     #include "nuklear_glfw_gl3.h"
     #include <windows.h>
+struct nk_context* globalCtx = NULL;
+struct nk_glfw* globalGLFW = NULL;
+void appScrollCallback(GLFWwindow* window,double xoffset,double yoffset)
+{
+    if (globalCtx && nk_window_is_any_hovered(globalCtx))
+        nk_gflw3_scroll_callback(window,xoffset,yoffset);
+    else
+        scroll_callback(window,xoffset,yoffset);
+}
 
 void freeMesh(Mesh* mesh)
 {
@@ -157,14 +166,14 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
             nk_label(ctx, "Rotation:", NK_TEXT_LEFT);
             nk_layout_row_dynamic(ctx, 25 * scaleY, 3);
             static transformation t  = { .rotation = {0.0f, 0.0f, 0.0f}, .scale = {1.0f, 1.0f, 1.0f}, .position = {0.0f, 0.0f, 0.0f} };
-            nk_property_float(ctx, "#X", -180, &t.rotation[0], 180, 1.0f, 0.2f * scaleX);
-            nk_property_float(ctx, "#Y", -180, &t.rotation[1], 180, 1.0f, 0.2f * scaleX);
-            nk_property_float(ctx, "#Z", -180, &t.rotation[2], 180, 1.0f, 0.2f * scaleX);
+            nk_property_float(ctx, "#X", -180, &t.rotation[0], 180, 1.0f, 0.01f * scaleX);
+            nk_property_float(ctx, "#Y", -180, &t.rotation[1], 180, 1.0f, 0.01f * scaleX);
+            nk_property_float(ctx, "#Z", -180, &t.rotation[2], 180, 1.0f, 0.01f * scaleX);
             nk_label(ctx, "Scale:", NK_TEXT_LEFT);
             nk_layout_row_dynamic(ctx, 25 * scaleY, 3);
-            nk_property_float(ctx, "#X", -100, &t.scale[0], 100, 1.0f, 0.2f * scaleX);
-            nk_property_float(ctx, "#Y", -100, &t.scale[1], 100, 1.0f, 0.2f * scaleX);
-            nk_property_float(ctx, "#Z", -100, &t.scale[2], 100, 1.0f, 0.2f * scaleX);
+            nk_property_float(ctx, "#X", 1, &t.scale[0], 100, 1.0f, 0.001 * scaleX);
+            nk_property_float(ctx, "#Y", 1, &t.scale[1], 100, 1.0f, 0.001 * scaleX);
+            nk_property_float(ctx, "#Z", 1, &t.scale[2], 100, 1.0f, 0.001 * scaleX);
 
             nk_label(ctx, "Position:", NK_TEXT_LEFT);
             nk_layout_row_dynamic(ctx, 25 * scaleY, 3);
@@ -193,6 +202,7 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
     #define MAX_ELEMENT_BUFFER 128 * 1024
 
     int main() {
+
         glfwInit();
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -255,13 +265,17 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
 
 
         struct nk_glfw glfw = {0};
-        struct nk_context *ctx = nk_glfw3_init(&glfw, window, 0);
+        struct nk_context *ctx = nk_glfw3_init(&glfw, window, NK_GLFW3_INSTALL_CALLBACKS);
+        glfwSetScrollCallback(window, appScrollCallback);
 
+        globalCtx = ctx;
+        globalGLFW = &glfw;
 
     struct nk_colorf bg = {0.65f,0.65f,0.65f,1.0f};
     resizeFont(&glfw,ctx,1);
         while (!glfwWindowShouldClose(window))
         {
+
 
             nk_glfw3_new_frame(&glfw);
             cameraInput(window);

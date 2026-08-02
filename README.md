@@ -8,12 +8,12 @@ You use WASD to move the camera forwards/backwards/left/right, but right click a
 
 There is a dashboard on the left of the window, with controls here  
 
-| Element           | Control                                                                                                                         |  
-|-------------------|---------------------------------------------------------------------------------------------------------------------------------|
-| Load model        | Button: press to open a prompt to load the model of choice                                                                      |
-| Background colour | Press to open/close a window which lets you change the background colour                                                        |
-|Change bg colour window | Colour picker that is selected with the mouse, and sliders that interact when you click and slide left or right with them       |
-| Rotate/Scale/Position sliders | Interact with the sliders by clicking on them and slide them left/right. Each slider corresponds to the specific X/Y/Z property |
+| Element           | Control                                                                                                                                                        |  
+|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Load model        | Button: press to open a prompt to load the model of choice                                                                                                     |
+| Background colour | Press to open/close a window which lets you change the background colour                                                                                       |
+|Change bg colour window | Colour picker that is selected with the mouse, and sliders that interact when you click and slide left or right with them                                      |
+| Rotate/Scale/Position sliders | Interact with the sliders by clicking on them and slide them left/right or by typing into the text box. Each slider corresponds to the specific X/Y/Z property |
 
 # Compatibility 
 Currently, the model loader is in a very early stage, so here is a small compilation of stuff that I found works and doesn't work.  
