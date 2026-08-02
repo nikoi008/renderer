@@ -94,17 +94,26 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
     nk_style_set_font(ctx, &font->handle);
 }
     void nuklearFrame(struct nk_context* ctx,struct nk_colorf* bg, GLFWwindow* window, struct nk_glfw* glfw, Model* model,Shader* shader)
-
+{
+    int width, height;
+    glfwGetWindowSize(window, &width, &height);
+    if (width > 0 && height > 0)
     {
-        int width, height;
-        glfwGetWindowSize(window, &width, &height);
-
         float scaleX = (float)width / 800;
         float scaleY = (float)height / 600;
-        struct nk_rect bounds = nk_rect(0, 0, 230 * scaleX, 600 * scaleY);
-        nk_window_set_bounds(ctx, "Config", bounds);
-        resizeFont(glfw,ctx,scaleY);
-        if (nk_begin(ctx, "Config", nk_rect(0, 0, 230, 250),NK_WINDOW_BORDER|NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE|NK_WINDOW_SCALABLE))
+        static float oldScaleX = 1.0f;
+        static float oldScaleY = 1.0f;
+
+        if (scaleX != oldScaleX || scaleY != oldScaleY)
+        {
+            struct nk_rect bounds = nk_rect(0, 0, 230 * scaleX, 600 * scaleY);
+            nk_window_set_bounds(ctx, "Config", bounds);
+            resizeFont(glfw,ctx,scaleY);
+            oldScaleX = scaleX;
+            oldScaleY = scaleY;
+        }
+
+        if (nk_begin(ctx, "Config", nk_rect(0, 0, 230 * scaleX, 600 * scaleY),NK_WINDOW_BORDER|NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE|NK_WINDOW_SCALABLE))
         {
 
             enum {EASY, HARD};
@@ -116,7 +125,7 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
                 OPENFILENAMEA f = {sizeof(OPENFILENAMEA)};
                 f.lpstrFilter = "glb files\0*.glb\0obj files\0*.obj\0gltf files\0*.gltf\0";
                 f.lpstrTitle = "Load Model";
-                char buff[MAX_PATH] = {};
+                static char buff[MAX_PATH] = {};
                 f.nMaxFile = sizeof(buff);
                 f.lpstrFile = buff;
                 GetOpenFileNameA(&f);
@@ -169,6 +178,7 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
         }
         nk_end(ctx);
     }
+}
 
     void frameBufferSizeCallback(GLFWwindow* window, int width, int height)
     {
@@ -245,6 +255,7 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
 
 
     struct nk_colorf bg = {0.65f,0.65f,0.65f,1.0f};
+    resizeFont(&glfw,ctx,1);
         while (!glfwWindowShouldClose(window))
         {
 
@@ -252,7 +263,6 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
             cameraInput(window);
             //nuklearFrame(ctx,&bg,window,&glfw,&model,&triShader);
             glClearColor(1.0f,0.0f,0.0f,1.0f);
-
             glClearColor(bg.r, bg.g, bg.b, 1.0f - bg.a);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             glEnable(GL_DEPTH_TEST);
