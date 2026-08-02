@@ -49,6 +49,38 @@ void freeModel(Model* model)
     model->numMeshes = 0;
     model->dir = NULL;
 }
+typedef struct
+{
+    vec3 rotation;
+    vec3 scale;
+    vec3 position;
+}transformation;
+/*
+void transformModel(Shader* shader,transformation t)
+{
+    mat4 trans;
+    glm_mat4_identity(trans);
+    glm_rotate(trans, glm_rad(90.0f), t.rotation);
+    glm_scale(trans, t.scale);
+    unsigned int transformLoc = glGetUniformLocation(shader->id,"transform");
+    glUniformMatrix4fv(transformLoc, 1, GL_FALSE,*trans);
+
+}
+*/
+void transformModel(Shader* shader, transformation t)
+{
+    mat4 trans;
+    glm_mat4_identity(trans);
+    glm_translate(trans, t.position);
+    glm_rotate(trans,glm_rad(t.rotation[0]),(vec3){1.0f, 0.0f, 0.0f});
+    glm_rotate(trans,glm_rad(t.rotation[1]),(vec3){0.0f, 1.0f, 0.0f});
+    glm_rotate(trans,glm_rad(t.rotation[2]),(vec3){0.0f, 0.0f, 1.0f});
+    glm_scale(trans,t.scale);
+
+    glm_translate(trans,t.position);
+    setMat4(shader,"transform",trans);
+}
+
 void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
 {
     struct nk_font_atlas *atlas;
@@ -61,7 +93,7 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
 
     nk_style_set_font(ctx, &font->handle);
 }
-    void nuklearFrame(struct nk_context* ctx,struct nk_colorf* bg, GLFWwindow* window, struct nk_glfw* glfw, Model* model)
+    void nuklearFrame(struct nk_context* ctx,struct nk_colorf* bg, GLFWwindow* window, struct nk_glfw* glfw, Model* model,Shader* shader)
 
     {
         int width, height;
@@ -69,7 +101,7 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
 
         float scaleX = (float)width / 800;
         float scaleY = (float)height / 600;
-        struct nk_rect bounds = nk_rect(0, 0, 230 * scaleX, 250 * scaleY);
+        struct nk_rect bounds = nk_rect(0, 0, 230 * scaleX, 600 * scaleY);
         nk_window_set_bounds(ctx, "Config", bounds);
         resizeFont(glfw,ctx,scaleY);
         if (nk_begin(ctx, "Config", nk_rect(0, 0, 230, 250),NK_WINDOW_BORDER|NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE|NK_WINDOW_SCALABLE))
@@ -99,26 +131,41 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
                 }
             }
 
-            nk_layout_row_dynamic(ctx, 30 * scaleY, 2);
-            if (nk_option_label(ctx, "easy", op == EASY)) op = EASY;
-            if (nk_option_label(ctx, "hard", op == HARD)) op = HARD;
-
-            nk_layout_row_dynamic(ctx, 25 * scaleY, 1);
-            nk_property_int(ctx, "Compression:", 0, &property, 100, 10, 1);
-
             nk_layout_row_dynamic(ctx, 20 *scaleY, 1);
             nk_label(ctx, "background:", NK_TEXT_LEFT);
             nk_layout_row_dynamic(ctx, 25 * scaleY, 1);
-            if (nk_combo_begin_color(ctx, nk_rgba_cf(*bg), nk_vec2(nk_widget_width(ctx),400 * scaleY))) {
+            if (nk_combo_begin_color(ctx, nk_rgb_cf(*bg), nk_vec2(nk_widget_width(ctx),400 * scaleY))) {
                 nk_layout_row_dynamic(ctx, 120 * scaleY, 1);
                 *bg = nk_color_picker(ctx, *bg, NK_RGBA);
                 nk_layout_row_dynamic(ctx, 25 * scaleY, 1);
                 bg->r = nk_propertyf(ctx, "#R:", 0, bg->r, 1.0f, 0.01f,0.005f);
                 bg->g = nk_propertyf(ctx, "#G:", 0, bg->g, 1.0f, 0.01f,0.005f);
                 bg->b = nk_propertyf(ctx, "#B:", 0, bg->b, 1.0f, 0.01f,0.005f);
-                bg->a = nk_propertyf(ctx, "#A:", 0, bg->a, 1.0f, 0.01f,0.005f);
                 nk_combo_end(ctx);
             }
+
+            nk_layout_row_dynamic(ctx, 25 * scaleY, 1);
+            nk_label(ctx, "Rotation:", NK_TEXT_LEFT);
+            nk_layout_row_dynamic(ctx, 25 * scaleY, 3);
+            static transformation t  = { .rotation = {0.0f, 0.0f, 0.0f}, .scale = {1.0f, 1.0f, 1.0f}, .position = {0.0f, 0.0f, 0.0f} };
+            nk_property_float(ctx, "#X", -180, &t.rotation[0], 180, 1.0f, 0.2f * scaleX);
+            nk_property_float(ctx, "#Y", -180, &t.rotation[1], 180, 1.0f, 0.2f * scaleX);
+            nk_property_float(ctx, "#Z", -180, &t.rotation[2], 180, 1.0f, 0.2f * scaleX);
+            nk_label(ctx, "Scale:", NK_TEXT_LEFT);
+            nk_layout_row_dynamic(ctx, 25 * scaleY, 3);
+            nk_property_float(ctx, "#X", -100, &t.scale[0], 100, 1.0f, 0.2f * scaleX);
+            nk_property_float(ctx, "#Y", -100, &t.scale[1], 100, 1.0f, 0.2f * scaleX);
+            nk_property_float(ctx, "#Z", -100, &t.scale[2], 100, 1.0f, 0.2f * scaleX);
+
+            nk_label(ctx, "Position:", NK_TEXT_LEFT);
+            nk_layout_row_dynamic(ctx, 25 * scaleY, 3);
+            nk_property_float(ctx, "#X", -1000000000000000000000000.0f, &t.position[0], 1000000000000000000000000.0f, 1.0f, 0.01f * scaleX);
+            nk_property_float(ctx, "#Y", -1000000000000000000000000.0f, &t.position[1], 1000000000000000000000000.0f, 1.0f, 0.01f * scaleX);
+            nk_property_float(ctx, "#Z", -1000000000000000000000000.0f, &t.position[2], 1000000000000000000000000.0f, 1.0f, 0.01f * scaleX);
+
+
+           transformModel(shader,t);
+
         }
         nk_end(ctx);
     }
@@ -136,7 +183,7 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
+        //glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
         GLFWwindow* window = glfwCreateWindow(800, 600, "openglwindow", NULL, NULL);
 
         if (window == NULL)
@@ -190,21 +237,20 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
         int width, height, nrChannels;
         mat4 view;
         mat4 projection;
-        Model model;
+        Model model = {0};
 
 
         struct nk_glfw glfw = {0};
         struct nk_context *ctx = nk_glfw3_init(&glfw, window, NK_GLFW3_INSTALL_CALLBACKS);
 
 
-        struct nk_colorf bg;
-        bg.a = 0.0f;
+    struct nk_colorf bg = {0.65f,0.65f,0.65f,1.0f};
         while (!glfwWindowShouldClose(window))
         {
 
             nk_glfw3_new_frame(&glfw);
             cameraInput(window);
-            nuklearFrame(ctx,&bg,window,&glfw,&model);
+            //nuklearFrame(ctx,&bg,window,&glfw,&model,&triShader);
             glClearColor(1.0f,0.0f,0.0f,1.0f);
 
             glClearColor(bg.r, bg.g, bg.b, 1.0f - bg.a);
@@ -212,7 +258,7 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
             glEnable(GL_DEPTH_TEST);
             //glBindTexture(GL_TEXTURE_2D, texture);
             useShader(&triShader);
-
+            nuklearFrame(ctx,&bg,window,&glfw,&model,&triShader);
 
             vec3 center;
             glm_vec3_add(camera.cameraPos, camera.cameraFront, center);
