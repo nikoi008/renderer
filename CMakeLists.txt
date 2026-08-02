@@ -18,5 +18,5 @@ add_executable(renderer main.c
         model.h)
 
 target_compile_options(renderer PRIVATE -O3)
-
+target_link_options(renderer PRIVATE -mwindows)
 target_link_libraries(renderer PRIVATE glfw glad::glad cglm::cglm assimp::assimp comdlg32 ole32)
