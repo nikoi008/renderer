@@ -171,9 +171,13 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
             nk_property_float(ctx, "#X", -1000000000000000000000000.0f, &t.position[0], 1000000000000000000000000.0f, 1.0f, 0.01f * scaleX);
             nk_property_float(ctx, "#Y", -1000000000000000000000000.0f, &t.position[1], 1000000000000000000000000.0f, 1.0f, 0.01f * scaleX);
             nk_property_float(ctx, "#Z", -1000000000000000000000000.0f, &t.position[2], 1000000000000000000000000.0f, 1.0f, 0.01f * scaleX);
-
-
            transformModel(shader,t);
+
+            nk_layout_row_static(ctx, 30 * scaleY, 140 * scaleX, 1);
+            if (nk_button_label(ctx, "Reset transformations"))
+            {
+                t = (transformation){ .rotation = {0.0f, 0.0f, 0.0f}, .scale = {1.0f, 1.0f, 1.0f}, .position = {0.0f, 0.0f, 0.0f} };
+            }
 
         }
         nk_end(ctx);
@@ -251,7 +255,7 @@ void resizeFont(struct nk_glfw* glfw, struct nk_context* ctx, float scale)
 
 
         struct nk_glfw glfw = {0};
-        struct nk_context *ctx = nk_glfw3_init(&glfw, window, NK_GLFW3_INSTALL_CALLBACKS);
+        struct nk_context *ctx = nk_glfw3_init(&glfw, window, 0);
 
 
     struct nk_colorf bg = {0.65f,0.65f,0.65f,1.0f};

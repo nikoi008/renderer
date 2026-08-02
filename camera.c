@@ -79,7 +79,7 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
     camera.fov -= (float)yoffset;
     if (camera.fov < 1.0f)  camera.fov = 1.0f;
-    if (camera.fov > 45.0f) camera.fov = 45.0f;
+    if (camera.fov > 120.0f) camera.fov = 120.0f;
 }
 
 void cameraInput(GLFWwindow *window)
